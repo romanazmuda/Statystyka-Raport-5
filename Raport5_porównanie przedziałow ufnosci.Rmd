@@ -1,0 +1,273 @@
+---
+title: "Raport 5"
+author: "Romana Żmuda"
+date: "31 05 2020"
+output: pdf_document
+---
+# Zadanie 1
+W całym sprawozdaniu dysponujemy rozkładem Bernoulliego, jako ciąg iid. Mamy wyznaczyć wartość prawdopodobieństwa pokrycia dla przedziałów ufnośći Walda. Konstuujemy funkcję zliczającą odpowiednie wartości $p_n$ dla $n = 10,11,...,100$ :
+
+```{r, echo = FALSE}
+p <- 0.5
+ufnosc <- 0.95
+
+
+Wald <- function(n) {
+    x <- 0:n
+    rozklad.bern <- dbinom(x, n, p)
+    p.esty <- x/n
+    kwantyl <- qnorm((1 + ufnosc) / 2)
+    dolny <- p.esty - kwantyl * sqrt(p.esty * (1 - p.esty) / n)
+    gorny <- p.esty + kwantyl * sqrt(p.esty * (1 - p.esty) / n)
+    przedzial <- as.numeric(dolny <= p & p <= gorny)
+    sum(przedzial * rozklad.bern)
+}
+n <- seq(10, 100, 1) #argumenty
+pn.wald<-vapply(n, Wald, 55)
+print("Wartości pn: ")
+print(round(pn.wald, 3))
+print("Średnia wartość pn:")
+print(sum(vapply(n, Wald, 55))/91)
+```
+Dla prawdopodobieństwa Bernoulliego $p = 1/2$ prawdopodobieństwo pokrycia dla $ n = 10,11,...,100$ jest na poziomie 0.939
+
+# Zadanie 2
+Nasze wyliczenia przedstawimy za pomocą łamanej o argumentach n i wartościach pn im odpowiadającym. Nadal rozważamy przedziały ufności Walda:
+
+```{r, echo = FALSE}
+plot(n, pn.wald, type = "l",ylab = "Pn")
+abline(h = ufnosc, lty = 2,col= "red")
+title(main = "Przedział ufności Walda")
+```
+
+# Zadanie 3
+
+Tym razem mamy wyznaczyć wartość prawdopodobieństwa pokrycia dla przedziałów ufności Wilsona, Agresti–Coulla oraz skonstruowanego metodą opartą na ilorazie wiarogodności. Konstuujemy funkcje zliczającą odpowiednie wartości $p_n$ dla $n = 10,11,...,100$ dla wszystkich trzech przedziałów, poniżej zamieścimy odpowiadające im wartości oraz wykresy łączące łamaną punkty $pn$.
+\newline
+Przedział ufności WILSONA
+```{r, echo = FALSE}
+Wilson <- function(n) {
+    k <- qnorm((1 + ufnosc) / 2)
+    x <- 0:n
+    x.esty <- x + k^2/2
+    n.esty <- n + k^2
+    rozklad.bern <- dbinom(x, n, p)
+    p.esty <- x.esty / n.esty
+    q.esty <- 1 - p.esty
+    dolny <- p.esty - (k*sqrt(n)/(n+k^2))*sqrt(p.esty*q.esty+(k^2)/(4*n))
+    gorny <- p.esty + (k*sqrt(n)/(n+k^2))*sqrt(p.esty*q.esty+(k^2)/(4*n))
+    przedzial <- as.numeric(dolny <= p & p <= gorny)
+    sum(przedzial * rozklad.bern)
+}    
+
+n <- seq(10, 100, 1) #argumenty
+pn.wil<-vapply(n, Wilson, 55)
+print("Wartości pn dla Wilsona: ")
+print(round(pn.wil, 3))
+print("Średnia wartość pn dla Wilsona:")
+print(sum(pn.wil)/91)
+
+plot(n, pn.wil, type = "l",
+    ylab = "Pn ")
+abline(h = ufnosc, lty = 2,col= "red")
+title(main = "Przedział ufności Wilsona")
+
+```
+Przedział ufności AGRESTI - COULLA
+
+```{r, echo = FALSE}
+Agresti.coulla <- function(n) {
+    k <- qnorm((1 + ufnosc) / 2)
+    x <- 0:n
+    x.esty <- x + k^2 / 2
+    n.esty <- n + k^2
+    rozklad.bern <- dbinom(x, n, p)
+    p.esty <- x.esty / n.esty
+    q.esty <- 1 - p.esty
+    dolny <- p.esty - k*(sqrt(p.esty*q.esty))/(sqrt(n.esty))
+    gorny <- p.esty + k*(sqrt(p.esty*q.esty))/(sqrt(n.esty))
+    przedzial <- as.numeric(dolny <= p & p <= gorny)
+    sum(przedzial * rozklad.bern)
+}
+n <- seq(10, 100, 1) #argumenty
+pn.a<-vapply(n, Agresti.coulla, 55)
+print("Wartości pn dla Agresti-coulla: ")
+print(round(pn.a, 3))
+print("Średnia wartość pn dla Agresti-coulla:")
+print(sum(pn.a)/91)
+
+plot(n, pn.a, type = "l",
+    ylab = "Pn ")
+abline(h = ufnosc, lty = 2,col= "red")
+title(main = "Przedział ufności Agresti-coulla")
+
+
+```
+Przedział ufności oparty na ILORAZIE WIARYGODNOŚCI
+```{r, echo = FALSE}
+iloraz.wiaryg <- function(n) {
+    x <- 0:n
+    bern <- dbinom(x, n, p)
+    logl <- function(p, x, n) ifelse(x == 0, n * log(1 - p),
+        ifelse(x == n, n * log(p), x * log(p) + (n - x) * log(1 - p)))
+    tol <- sqrt(.Machine$double.eps)
+    fx <- function(x) {
+        kryt <- qchisq(ufnosc, df = 1)
+        fred <- function(p) 2 * (logl(p.daszek, x, n) - logl(p, x, n)) - kryt
+        p.daszek <- x / n
+        if (p.daszek == 0) {
+            dolny <- 0
+        } else {
+            dolny <- uniroot(fred, lower = 0, upper = p.daszek, tol = tol)$root
+        }
+        if (p.daszek == 1) {
+            gorny <- 1
+        } else {
+            gorny <- uniroot(fred, lower = p.daszek, upper = 1, tol = tol)$root
+        }
+        c(dolny, gorny)
+    }
+    bar <- lapply(x, fx)
+    dolny <- sapply(bar, function(x) x[1])
+    gorny <- sapply(bar, function(x) x[2])
+    num <- as.numeric(dolny <= p & p <= gorny)
+    sum(num * bern)
+}
+
+n <- seq(10, 100, 1) #argumenty
+pn.iloraz<-vapply(n, iloraz.wiaryg, 55)
+print("Wartości pn dla ilorazu wiarygodności: ")
+print(round(pn.iloraz, 3))
+print("Średnia wartość pn dla ilorazu wiarygodności:")
+print(sum(pn.iloraz)/91)
+
+plot(n, pn.iloraz, type = "l",
+    ylab = "Pn ")
+abline(h = ufnosc, lty = 2,col= "red")
+title(main = "Przedział ufności ilorazu wiarygodności")
+
+```
+
+# Zadanie 4
+
+Po obserwacji wykresów możemy dojść do wniosku, że najmniejsze oscylacje  prawdopodobieństwa pokrycia względem $1-\alpha$ występują dla przedziałów ufności opartym na ilorazie wiarogodności.
+\newpage 
+
+# Zadanie 5
+
+W tym zadaniu porównamy ze sobą przedziały ufności Walda i Agresti - coulla dla różnych prawdopodobień.
+\newline
+
+Prawdopodobieństwo $p=1/10$ :
+
+```{r, echo = FALSE}
+p <- 0.1
+
+n <- seq(10, 100, 1)
+par(mfrow=c(2,1),  mar=c(2,2,2,2))
+plot(n, vapply(n, Wald, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Walda p=0.1")
+
+plot(n,vapply(n, Agresti.coulla, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Agresti-Coulla p=0.1")
+
+```
+\newpage
+
+Prawdopodobieństwo $p=2/10$ :
+
+```{r, echo = FALSE}
+p <- 0.2
+
+n <- seq(10, 100, 1)
+par(mfrow=c(2,1),  mar=c(2,2,2,2))
+plot(n, vapply(n, Wald, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Walda p=0.2")
+
+plot(n,vapply(n, Agresti.coulla, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Agresti-Coulla p=0.2")
+
+
+```
+\newpage
+
+Prawdopodobieństwo $p=3/10$ :
+
+
+
+```{r, echo = FALSE}
+p <- 0.3
+
+n <- seq(10, 100, 1)
+par(mfrow=c(2,1), mar=c(2,2,2,2))
+plot(n, vapply(n, Wald, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Walda p=0.3")
+
+plot(n,vapply(n, Agresti.coulla, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Agresti-Coulla p=0.3")
+
+```
+\newpage
+
+Prawdopodobieństwo $p=4/10$ :
+
+
+
+```{r, echo = FALSE}
+p <- 0.4
+
+n <- seq(10, 100, 1)
+par(mfrow=c(2,1) ,mar=c(2,2,2,2))
+plot(n, vapply(n, Wald, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Walda p=0.4")
+
+plot(n,vapply(n, Agresti.coulla, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Agresti-Coulla p=0.4")
+
+```
+\newpage
+
+Prawdopodobieństwo $p=5/10$ :
+
+
+```{r, echo = FALSE}
+p <- 0.5
+
+n <- seq(10, 100, 1)
+par(mfrow=c(2,1), mar=c(2,2,2,2))
+plot(n, vapply(n, Wald, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2,col= "red")
+title(main = "Przedział ufności Walda p=0.5")
+
+plot(n,vapply(n, Agresti.coulla, 55), type = "l",
+    ylab = "Pn")
+abline(h = 0.93, lty = 2, col= "red")
+title(main = "Przedział ufności Agresti-Coulla p=0.5")
+
+```
+ Naszym zadaniem jest podanie takiego argumentu n, gdy dla każdego kolejnego $n(p)>n$ mamy że $p_n>=0.93$, oczywiście dla różnych p. Stwórzmy tabele wyników n, których wartości wyczytujemy z wykresów:
+```{r, echo = FALSE} 
+t <- cbind.data.frame(c(100,99,81,64,72),c(10,10,10,10,33))
+print("Odpowiednie wartośći n dla Wald i Agresti - Coulla")
+colnames(t) <- c("Wald", "Agresti-Coulla")
+rownames(t) <- c("p=0.1","p=0.2","p=0.3","p=0.4","p=0.5")
+print(t)
+```
+Wnioski:  Przedział ufności Agrest-Coulla jest lepszy od przedziału Walda, gdyż w badanych sytuacjach zawsze szybciej spełnia założenie $p_n>=0.93$ dla jak najmniejszego n.  Przedział Walda nie radzi sobie z mniejszymi prawdopodobieństwami, mniejsze róznice między tymi dwoma przedziałami zaciera się przy większych p, jednak nadal na korzyść Agrest-Coulla. Ciekawe zjawisko dzieje się z dokładnością, można zaobserwować fakt, że dokładność przedziału Walda poprawia się wraz ze wzrostem n, podczas gdy przedział Agresti-Coulla od początku działa na wyoskim poziomie. Oscylacje są mniejsze dla metody Walda.
